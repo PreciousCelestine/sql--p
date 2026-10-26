@@ -5,12 +5,21 @@
 
 -- Question 1
 ---Retrieve information about the products with colour values except null, red, silver/black, white and list price between
---£75 and £750. Rename the column StandardCost to Price. Also, sort the results in descending order by list price.--
+--Â£75 and Â£750. Rename the column StandardCost to Price. Also, sort the results in descending order by list price.--
 
 
-SELECT * FROM Production.Product
-WHERE Color NOT IN ('NULL','Red','Silver','Black','White')
-AND ListPrice BETWEEN 75 AND 750;
+SELECT
+    ProductID,
+    Name,
+    ProductNumber,
+    Color,
+    StandardCost AS Price,
+    ListPrice
+FROM Production.Product
+WHERE Color IS NOT NULL
+  AND Color NOT IN ('Red', 'Silver/Black', 'White')
+  AND ListPrice BETWEEN 75 AND 750
+ORDER BY ListPrice DESC;
 
 
 --Question 2
@@ -18,19 +27,42 @@ AND ListPrice BETWEEN 75 AND 750;
 --born between 1972 and 1975 and hire date between 2001 and 2002.
 
 
-SELECT * FROM HumanResources.Employee
-WHERE Gender = 'F' AND BirthDate BETWEEN '1972/1/1' AND '1975/12/31' AND HireDate BETWEEN '2001/1/1' AND '2001/12/31'
-AND Gender = 'M' AND BirthDate BETWEEN '1962/1/1' AND '1970/12/31' AND HireDate BETWEEN '2001/1/1' AND '2002/12/31';
+SELECT
+    BusinessEntityID,
+    JobTitle,
+    Gender,
+    BirthDate,
+    HireDate
+FROM HumanResources.Employee
+WHERE
+    (
+        Gender = 'M'
+        AND BirthDate >= '19620101'
+        AND BirthDate < '19710101'
+        AND HireDate >= '20020101'
+    )
+    OR
+    (
+        Gender = 'F'
+        AND BirthDate >= '19720101'
+        AND BirthDate < '19760101'
+        AND HireDate >= '20010101'
+        AND HireDate < '20030101'
+    )
+ORDER BY Gender, BirthDate, BusinessEntityID;
 
 --Question 3
---Create a list of 10 most expensive products that have a product number beginning with ‘BK’. Include only the product
+--Create a list of 10 most expensive products that have a product number beginning with â€˜BKâ€™. Include only the product
 --ID, Name and colour.
 
 
-SELECT TOP(10)* FROM Production.Product
-WHERE ProductNumber LIKE 'BK%' AND ProductID  IS NOT NULL 
-AND Color IS NOT NULL AND Name IS NOT NULL
-ORDER BY ListPrice DESC;
+SELECT TOP (10)
+    ProductID,
+    Name,
+    Color
+FROM Production.Product
+WHERE ProductNumber LIKE 'BK%'
+ORDER BY ListPrice DESC, ProductID;
 
 --Question 4
 --Create a list of all contact persons, where the first 4 characters of the last name are the same asthe first four characters
@@ -38,57 +70,102 @@ ORDER BY ListPrice DESC;
 --a new column called full name combining first name and the last name only. Also provide the length ofthe new column
 --full name.
 
-SELECT * FROM Person.EmailAddress
-SELECT PP.FirstName,PP.LastName,PE.EmailAddress ,
-  CASE
-        WHEN LEFT(PP.LastName, 4) = LEFT(PE.EmailAddress, 4) THEN 'Matching'
-        ELSE 'Not Matching'
-    END AS last_name_match,
-    CASE
-        WHEN LEFT(PP.FirstName, 4) = LEFT(PP.FirstName, 4) THEN PP.FirstName + ' ' + PP.LastName
-        ELSE NULL
-    END AS full_name,
-    LEN(CASE
-        WHEN LEFT(PP.FirstName, 4) = LEFT(PP.LastName, 4) THEN PP.FirstName + ' ' + PP.LastName
-        ELSE NULL
-    END) AS full_name_length
-FROM Person.Person AS PP 
-INNER JOIN Person.EmailAddress AS PE
-ON PP.BusinessEntityID = PE.BusinessEntityID
+-- A. Contacts whose last name and email address
+-- have the same first four characters.
+SELECT
+    p.BusinessEntityID,
+    p.FirstName,
+    p.LastName,
+    e.EmailAddress
+FROM Person.Person AS p
+INNER JOIN Person.EmailAddress AS e
+    ON p.BusinessEntityID = e.BusinessEntityID
+WHERE LEFT(p.LastName, 4) = LEFT(e.EmailAddress, 4)
+ORDER BY p.BusinessEntityID, e.EmailAddress;
+
+
+-- B. Contacts whose first and last names
+-- begin with the same initial.
+SELECT
+    p.BusinessEntityID,
+    p.FirstName,
+    p.LastName,
+    CONCAT(p.FirstName, ' ', p.LastName) AS FullName,
+    LEN(CONCAT(p.FirstName, ' ', p.LastName)) AS FullNameLength
+FROM Person.Person AS p
+WHERE LEFT(p.FirstName, 1) = LEFT(p.LastName, 1)
+ORDER BY p.BusinessEntityID;
 
 
 --Question 5
 --Return all product subcategories that take an average of 3 days or longer to manufacture.
 
-SELECT ProductSubcategoryID FROM Production.Product
-WHERE DaysToManufacture >= 3
+SELECT
+    p.ProductSubcategoryID,
+    ps.Name AS SubcategoryName,
+    AVG(CAST(p.DaysToManufacture AS DECIMAL(10, 2)))
+        AS AverageManufacturingDays
+FROM Production.Product AS p
+INNER JOIN Production.ProductSubcategory AS ps
+    ON p.ProductSubcategoryID = ps.ProductSubcategoryID
+GROUP BY
+    p.ProductSubcategoryID,
+    ps.Name
+HAVING
+    AVG(CAST(p.DaysToManufacture AS DECIMAL(10, 2))) >= 3
+ORDER BY
+    AverageManufacturingDays DESC,
+    p.ProductSubcategoryID;
 
 
 --Question 6
 --Create a list of product segmentation by defining criteria that places each item in a predefined segment as follows. If
---price gets less than £200 then low value. If price is between £201 and £750 then mid value. If between £750 and £1250
+--price gets less than Â£200 then low value. If price is between Â£201 and Â£750 then mid value. If between Â£750 and Â£1250
 --then mid to high value else higher value. Filter the results only for black, silver and red color products.
 	
-SELECT *,"Price Range" = CASE
-        WHEN ListPrice <= 200 THEN 'low value'
-        WHEN ListPrice >= 201 AND ListPrice <= 750 THEN 'mid value'
-        WHEN ListPrice >= 751 AND ListPrice <= 1250 THEN 'mid to high value'
-        ELSE 'higher value'
-        END    
+SELECT
+    ProductID,
+    Name,
+    ProductNumber,
+    Color,
+    ListPrice,
+    CASE
+        WHEN ListPrice <= 200 THEN 'Low value'
+        WHEN ListPrice <= 750 THEN 'Mid value'
+        WHEN ListPrice <= 1250 THEN 'Mid to high value'
+        ELSE 'Higher value'
+    END AS PriceSegment
 FROM Production.Product
- WHERE color IN ('black', 'silver', 'red')
+WHERE Color IN ('Black', 'Silver', 'Red')
 ORDER BY ProductNumber;
 
 --Question 7
 --How many Distinct Job title is present in the Employee table?
 
-SELECT DISTINCT COUNT (JobTitle) FROM HumanResources.Employee
+SELECT
+    COUNT(DISTINCT JobTitle) AS UniqueJobTitles
+FROM HumanResources.Employee;
 
 --Question 8
 --Use employee table and calculate the ages of each employee at the time of hiring.
 
-SELECT *, "AgeHired" = DATEDIFF(year,BirthDate,HireDate)
-from HumanResources.Employee
+SELECT
+    BusinessEntityID,
+    JobTitle,
+    BirthDate,
+    HireDate,
+    DATEDIFF(YEAR, BirthDate, HireDate)
+    - CASE
+        WHEN DATEADD(
+            YEAR,
+            DATEDIFF(YEAR, BirthDate, HireDate),
+            BirthDate
+        ) > HireDate
+        THEN 1
+        ELSE 0
+      END AS AgeAtHire
+FROM HumanResources.Employee
+ORDER BY BusinessEntityID;
 
 
 --Question 9
@@ -118,26 +195,32 @@ FROM
 --silver/black or blue take the square root of the price and double the value. Column should be called Newprice. For
 --each item, also calculate commission as 37.5% of newly computed list price.
 
-SELECT ProductNumber,ProductID, Name, Color, ListPrice,
-    CASE
-        WHEN color = 'white' THEN ListPrice * 1.08
-        WHEN color = 'yellow' THEN ListPrice * 1.925
-        WHEN color = 'black' THEN ListPrice * 1.172
-        WHEN color IN ('multi', 'silver', 'silver/black', 'blue') THEN SQRT(ListPrice) * 2
-        ELSE ListPrice
-    END AS Newprice,
-    CASE
-        WHEN color = 'multi' THEN 0.375 * SQRT(ListPrice) * 2
-        ELSE 0.375 * CASE
-            WHEN color = 'white' THEN ListPrice * 1.08
-            WHEN color = 'yellow' THEN ListPrice * 0.925
-            WHEN color = 'black' THEN ListPrice * 1.172
-            WHEN color IN ('silver', 'silver/black', 'blue') THEN SQRT(ListPrice) * 2
-            ELSE ListPrice
-        END
-    END AS commission
-FROM
-    Production.Product;
+SELECT
+    p.ProductID,
+    p.ProductNumber,
+    p.Name,
+    p.Color,
+    p.ListPrice,
+    pricing.NewPrice,
+    pricing.NewPrice * 0.375 AS Commission
+FROM Production.Product AS p
+CROSS APPLY (
+    SELECT
+        CASE
+            WHEN p.Color = 'White'
+                THEN p.ListPrice * 1.08
+            WHEN p.Color = 'Yellow'
+                THEN p.ListPrice * 0.925
+            WHEN p.Color = 'Black'
+                THEN p.ListPrice * 1.172
+            WHEN p.Color IN (
+                'Multi', 'Silver', 'Silver/Black', 'Blue'
+            )
+                THEN SQRT(p.ListPrice) * 2
+            ELSE p.ListPrice
+        END AS NewPrice
+) AS pricing
+ORDER BY p.ProductID;
 
 
 --Question 12
@@ -194,22 +277,40 @@ ORDER BY
 SELECT
     soh.SalesOrderNumber AS OrderNumber,
     soh.OrderDate,
+    soh.CustomerID,
+    COALESCE(
+        store.Name,
+        NULLIF(
+            LTRIM(RTRIM(CONCAT(
+                customer.FirstName, ' ', customer.LastName
+            ))),
+            ''
+        ),
+        'Unknown customer'
+    ) AS CustomerName,
+    soh.SubTotal,
+    soh.TaxAmt,
+    soh.Freight,
     soh.TotalDue AS OrderAmount,
-    CONCAT(c.FirstName, ' ', c.LastName) AS CustomerName,
-    CONCAT(e.FirstName, ' ', e.LastName) AS SalesPerson,
-    sp.CommissionPct * soh.TotalDue AS Commission
-FROM
-    Sales.SalesOrderHeader AS soh
-JOIN
- Sales.Customer AS v ON soh.CustomerID = v.CustomerID
-JOIN
-    Sales.vIndividualCustomer AS c ON v.AccountNumber = c.
-JOIN
-    Sales.SalesPerson AS sp ON soh.SalesPersonID = sp.BusinessEntityID
-JOIN
-    Person.Person AS e ON sp.BusinessEntityID = e.BusinessEntityID;
-
-SELECT * FROM Sales.SalesTerritory
+    soh.SalesPersonID,
+    CASE
+        WHEN soh.SalesPersonID IS NULL THEN 'Unassigned'
+        ELSE CONCAT(salesperson.FirstName, ' ', salesperson.LastName)
+    END AS SalesPerson,
+    sp.CommissionPct,
+    soh.SubTotal * sp.CommissionPct AS EstimatedCommission
+FROM Sales.SalesOrderHeader AS soh
+INNER JOIN Sales.Customer AS c
+    ON soh.CustomerID = c.CustomerID
+LEFT JOIN Person.Person AS customer
+    ON c.PersonID = customer.BusinessEntityID
+LEFT JOIN Sales.Store AS store
+    ON c.StoreID = store.BusinessEntityID
+LEFT JOIN Sales.SalesPerson AS sp
+    ON soh.SalesPersonID = sp.BusinessEntityID
+LEFT JOIN Person.Person AS salesperson
+    ON sp.BusinessEntityID = salesperson.BusinessEntityID
+ORDER BY soh.OrderDate, soh.SalesOrderID;
 
 
 --Question 15
@@ -242,25 +343,32 @@ FROM
 --Question 16
 --Create a view to find out the top 5 most expensive products for each colour.
 
-CREATE VIEW MostExpensiveProductsByColor AS
+CREATE VIEW dbo.MostExpensiveProductsByColor
+AS
 WITH RankedProducts AS (
     SELECT
-        p.ProductID,
-        p.Name AS ProductName,2Z
-        p.Color,
-        p.StandardCost,
-        ROW_NUMBER() OVER(PARTITION BY p.Color ORDER BY p.StandardCost DESC) AS Rank
-    FROM
-        Production.Product AS p
+        ProductID,
+        Name AS ProductName,
+        Color,
+        ListPrice,
+        ROW_NUMBER() OVER (
+            PARTITION BY Color
+            ORDER BY ListPrice DESC, ProductID
+        ) AS PriceRank
+    FROM Production.Product
+    WHERE Color IS NOT NULL
 )
 SELECT
     ProductID,
     ProductName,
     Color,
-    StandardCost
-FROM
-    RankedProducts
-WHERE
-    Rank <= 5;
+    ListPrice,
+    PriceRank
+FROM RankedProducts
+WHERE PriceRank <= 5;
 
-	SELECT * FROM MostExpensiveProductsByColor
+GO
+
+SELECT *
+FROM dbo.MostExpensiveProductsByColor
+ORDER BY Color, PriceRank;
